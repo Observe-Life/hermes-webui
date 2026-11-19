@@ -116,8 +116,9 @@ watch(() => ui.mobileView, (v) => {
   if (v) history.pushState({ m: v }, '')
 })
 function onPop() {
-  // 从最上层开始逐层关：设置二级页 > 设置/扩展层 > 会话弹窗 > 聊天页
-  if (ui.settingsSection) ui.settingsSection = ''
+  // 从最上层开始逐层关：设置三级子页 > 设置二级页 > 设置/扩展层 > 会话弹窗 > 聊天页
+  if (ui.settingsSub) ui.settingsSub = ''
+  else if (ui.settingsSection) ui.settingsSection = ''
   else if (ui.mobileView) ui.mobileView = null
   else if (ui.sheetId) ui.sheetId = ''
   else if (pane.value === 1) pane.value = 0

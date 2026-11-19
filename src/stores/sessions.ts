@@ -110,8 +110,8 @@ export const useSessionsStore = defineStore('sessions', {
       if (row) row.unread = false
     },
     async create(): Promise<null | string> {
-      const r = await gatewayClient().request<{ info?: { id?: string } }>('session.create', { source: 'webapp' })
-      const id = r.info?.id || null
+      const r = await gatewayClient().request<{ session_id?: string; info?: { id?: string } }>('session.create', { source: 'webapp' })
+      const id = r.session_id || r.info?.id || null
       if (id) await this.load()
       return id
     },

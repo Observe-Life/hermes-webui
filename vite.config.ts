@@ -28,11 +28,12 @@ export default defineConfig({
     allowedHosts: true,
     // 开发预览：契约层请求直转官方网关（同源策略下由网关的登录会话凭证说话）。
     proxy: {
-      '/api': { target: 'http://192.168.31.115:9120', changeOrigin: true, ws: true },
-      // 登录链路一并代理：登录页与其口令接口都在官方网关上；种下的会话凭证
-      // 绑定主机（不区分端口），登录一次开发预览即可用。
-      '/login': { target: 'http://192.168.31.115:9120', changeOrigin: true },
-      '/auth': { target: 'http://192.168.31.115:9120', changeOrigin: true },
+      // 开发预览直转官方网关；来源头改写为官方网页端自己的地址——
+      // 网关的跨站写保护（Cookie 鉴权的写请求必须来自 Webapp 同源）因此放行。
+      // 仅开发态生效；产线走官方容器托管，天然同源，无需此改写。
+      '/api': { target: 'http://192.168.31.115:9120', changeOrigin: true, ws: true, headers: { origin: 'http://192.168.31.115:9120' } },
+      '/login': { target: 'http://192.168.31.115:9120', changeOrigin: true, headers: { origin: 'http://192.168.31.115:9120' } },
+      '/auth': { target: 'http://192.168.31.115:9120', changeOrigin: true, headers: { origin: 'http://192.168.31.115:9120' } },
       '/fonts': { target: 'http://192.168.31.115:9120', changeOrigin: true }
     }
   }
