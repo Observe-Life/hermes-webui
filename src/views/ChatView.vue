@@ -4,7 +4,7 @@
       <v-btn icon="mdi-arrow-left" variant="text" @click="emit('back')" />
       <v-toolbar-title class="text-subtitle-1 font-weight-bold">{{ session?.name || '会话' }}</v-toolbar-title>
       <v-spacer />
-      <span v-if="rt.conn && rt.conn !== 'open'" class="run-pill mr-2"><span class="spin" />{{ rt.conn === 'connecting' || rt.conn === 'reconnecting' ? '重连中' : '连接断开' }}</span>
+      <span v-if="rt.conn && rt.conn !== 'open'" class="run-pill mr-2"><span class="spin" />{{ rt.conn === 'connecting' ? '重连中' : '连接断开' }}</span>
       <span v-if="chat.sending || chat.stream" class="run-pill mr-2"><span class="spin" />回复中</span>
     </v-toolbar>
 

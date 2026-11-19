@@ -50,7 +50,7 @@ onMounted(() => {
 })
 onUnmounted(() => { if (poll) clearInterval(poll) })
 
-function openSignin() { location.assign('/login') }
+function openSignin() { location.assign('/login?next=' + encodeURIComponent(location.pathname + location.search)) }
 </script>
 
 <style scoped>

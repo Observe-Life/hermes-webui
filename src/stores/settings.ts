@@ -88,7 +88,7 @@ export const useSettingsStore = defineStore('settings', {
     // 官方定义：某一级板块下有哪些二级页
     subpagesFor(section: string) {
       const defs: Array<{ id: string; labelKey: string }> = CONFIG_SUBPAGE_DEFINITIONS[section] || []
-      return defs.map(d => ({ id: d.id, label: SUBPAGE_LABELS[d.labelKey] || d.labelKey }))
+      return defs.map(d => ({ id: d.id, label: SUBPAGE_LABELS[d.id] || d.labelKey }))
     },
     hasSubpages(section: string) {
       return (CONFIG_SUBPAGE_DEFINITIONS[section] || []).length > 0

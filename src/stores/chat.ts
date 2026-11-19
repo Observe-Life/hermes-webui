@@ -9,6 +9,8 @@ export interface Msg { who: 'me' | 'ai'; text: string }
 
 // B3：流式状态按契约携带 turn_id/segment/offset（UTF-16 已发送数），重发块按偏移去重
 interface Stream { text: string; applied: number; segment: number | null; turnId: string | null }
+// 段游标：封口后低于该段号的帧直接忽略（官方 admitSegmentDelta/admitSegmentSeal 语义）
+interface Cursor { turnId: string | null; segment: number }
 
 function textOf(v: unknown): string {
   if (typeof v === 'string') return v
@@ -42,6 +44,7 @@ export const useChatStore = defineStore('chat', {
     activeId: '' as string,
     msgs: [] as Msg[],
     stream: null as null | Stream,
+    cursor: null as null | Cursor,
     sending: false,
     loaded: false
   }),
@@ -88,43 +91,66 @@ export const useChatStore = defineStore('chat', {
         }
         if (ev.type === 'message.start') {
           if (!this.stream) this.stream = { text: '', applied: 0, segment: null, turnId: null }
+        } else if (ev.type === 'message.interim') {
+          // SR1：段封口事件（工具前评注）。官方 admitSegmentSeal：收口气泡、游标推进到 segment+1
+          const p = ev.payload as { turn_id?: null | string; segment?: null | number; text?: null | string; already_streamed?: null | boolean }
+          const seg = typeof p.segment === 'number' ? p.segment : 0
+          if (!p.already_streamed && typeof p.text === 'string' && p.text) {
+            if (this.stream && this.stream.text) this.msgs.push({ who: 'ai', text: this.stream.text })
+            this.msgs.push({ who: 'ai', text: p.text })
+          } else if (this.stream && this.stream.text) {
+            this.msgs.push({ who: 'ai', text: this.stream.text })
+          }
+          this.stream = null
+          this.cursor = { turnId: p.turn_id ?? null, segment: seg + 1 }
         } else if (ev.type === 'message.delta') {
           const p = ev.payload as { text?: null | string; turn_id?: null | string; segment?: null | number; offset?: null | number }
+          const seg = typeof p.segment === 'number' ? p.segment : null
+          // 过期段：低于已封口游标的帧整体忽略（官方 #144609 防重复气泡）
+          if (seg !== null && this.cursor && this.cursor.turnId === (p.turn_id ?? null) && seg < this.cursor.segment) return
           // 段界：本轮文字盒在此收口，落成一个气泡，后续段开新气泡
           if (p.text === null || p.text === undefined) {
             if (this.stream && this.stream.text) this.msgs.push({ who: 'ai', text: this.stream.text })
             this.stream = null
             return
           }
-          if (!this.stream) this.stream = { text: '', applied: 0, segment: null, turnId: null }
-          // 新轮/新段：收口旧气泡、重置偏移
-          if ((p.turn_id ?? null) !== this.stream.turnId || (p.segment ?? null) !== this.stream.segment) {
+          if (!this.stream) this.stream = { text: '', applied: 0, segment: seg, turnId: p.turn_id ?? null }
+          // 仅在真正前进到新段/新轮时收口旧气泡；过期段帧忽略
+          if ((seg === null || this.stream.segment === null || seg > this.stream.segment || (p.turn_id ?? null) !== this.stream.turnId)) {
             if (this.stream.text) this.msgs.push({ who: 'ai', text: this.stream.text })
-            this.stream = { text: '', applied: 0, segment: p.segment ?? null, turnId: p.turn_id ?? null }
+            this.stream = { text: '', applied: 0, segment: seg, turnId: p.turn_id ?? null }
           }
           if (typeof p.text === 'string' && p.text) {
             const off = typeof p.offset === 'number' ? p.offset : null
-            // 重发的已应用块直接丢弃（契约：client drops a re-sent chunk it already applied）
-            if (off === null || off >= this.stream.applied) {
+            // B3R1：官方 admitSegmentDelta 语义——只丢已应用前缀，保留未见尾部
+            if (off === null) {
               this.stream.text += p.text
-              if (off !== null) this.stream.applied = off + p.text.length
+            } else if (off >= this.stream.applied) {
+              this.stream.text += p.text
+              this.stream.applied = off + p.text.length
+            } else {
+              const overlap = this.stream.applied - off
+              const tail = p.text.slice(Math.max(0, overlap))
+              if (tail) {
+                this.stream.text += tail
+                this.stream.applied = off + p.text.length
+              }
             }
           }
         } else if (ev.type === 'message.complete') {
-          const p = ev.payload as { text?: unknown; status?: null | string; failure_reason?: null | string; warning?: null | string }
-          // B2：完整文本优先（防中途丢段静默截断）；服务端失败/警告要给用户看得见的反馈
-          if (p.status === 'failure' || p.failure_reason) {
-            if (this.stream?.text) this.msgs.push({ who: 'ai', text: this.stream.text })
-            this.stream = null
-            useUiStore().toastMsg('回复失败：' + (p.failure_reason || p.status || '未知原因'))
-            void useSessionsStore().load()
-            return
-          }
+          const p = ev.payload as { text?: unknown; status?: null | string; failure_reason?: null | string; error?: null | string; warning?: null | string }
+          // B2R1：契约 TurnStatus='complete'|'error'|'interrupted'；普通服务商错误走 status='error'+payload.error
+          const failed = p.status === 'error' || !!p.failure_reason
           let final = this.stream?.text || ''
           if (typeof p.text === 'string' && p.text.length >= final.length) final = p.text
           if (final) this.msgs.push({ who: 'ai', text: final })
-          else if (p.warning) useUiStore().toastMsg(String(p.warning))
           this.stream = null
+          this.cursor = null
+          if (failed) {
+            useUiStore().toastMsg('回复失败：' + (p.failure_reason || p.error || p.status || '未知原因'))
+          }
+          // SR2：警告与正常回复并存，不进 else
+          if (p.warning) useUiStore().toastMsg(String(p.warning))
           void useSessionsStore().load()
         }
       })
