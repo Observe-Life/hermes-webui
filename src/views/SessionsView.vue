@@ -25,7 +25,7 @@
           @touchend.passive="pressEnd"
           @touchcancel="pressEnd"
           @contextmenu.prevent="openSheet(s.id)">
-          <div class="ava" :style="{ background: s.color }">{{ s.name.charAt(0) }}</div>
+          <div class="ava" :style="{ background: avaColor(s.id) }">{{ s.name.charAt(0) }}</div>
           <div class="lines">
             <div class="l1">
               <span class="tname">{{ s.name }}</span>
@@ -95,21 +95,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUiStore } from '../stores/ui'
-import type { FakeSession } from '../data'
+import { useSessionsStore, type Row } from '../stores/sessions'
 
 const props = defineProps<{ embedded?: boolean }>()
 const emit = defineEmits<{ open: [] }>()
 const ui = useUiStore()
+const sessions = useSessionsStore()
 const router = useRouter()
+
 const q = ref('')
-const match = (t: string) => !q.value || t.toLowerCase().includes(q.value.toLowerCase())
+const match = (r: Row) => !q.value || (r.name + r.preview).toLowerCase().includes(q.value.toLowerCase())
 const groups = computed(() => [
-  { label: '置顶', items: ui.pinned.filter(x => match(x.name + x.preview)) },
-  { label: '对话', items: ui.chats_.filter(x => match(x.name + x.preview)) }
+  { label: '置顶', items: sessions.pinnedRows.filter(match) },
+  { label: '对话', items: sessions.talkRows.filter(match) }
 ])
+
+// 头像底色：按会话 id 稳定取色（原型调色板沿用）
+const PALETTE = ['#523410', '#2a9d99', '#391c57', '#dd5b00', '#0075de', '#1aae39', '#615d59']
+function avaColor(id: string) {
+  let h = 0
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return PALETTE[h % PALETTE.length]
+}
 
 let pressTimer: number | undefined
 let suppress = false
@@ -136,13 +146,18 @@ function rowClick(id: string) {
 }
 function openSession(id: string) {
   ui.setActive(id)
-  ui.markRead(id)
+  void sessions.markRead(id)
   emit('open')
 }
-function newChat() {
-  const s = ui.addSession()
-  if (props.embedded) openSession(s.id)
-  else router.push('/chat/' + s.id)
+async function newChat() {
+  try {
+    const id = await sessions.create()
+    if (!id) return
+    if (props.embedded) openSession(id)
+    else router.push('/chat/' + id)
+  } catch (e) {
+    ui.toastMsg(e instanceof Error ? e.message : String(e))
+  }
 }
 function goSettings() {
   if (props.embedded) ui.mobileView = 'settings'
@@ -157,13 +172,13 @@ function goExtensions() {
 const sheetId = computed(() => ui.sheetId)
 const renaming = ref(false)
 const renameText = ref('')
-const sheetSession = computed(() => ui.sessions.find(s => s.id === sheetId.value))
+const sheetSession = computed(() => sessions.rows.find(r => r.id === sheetId.value))
 const activeText = computed(() => {
   const t = sheetSession.value?.time || ''
-  if (t === '现在') return '刚刚活跃'
   if (t === '昨天') return '1 天前活跃'
-  if (/^\\d{2}:\\d{2}$/.test(t)) return '今天活跃'
-  return '2 天前活跃'
+  if (/^\d{2}:\d{2}$/.test(t)) return '今天活跃'
+  if (!t) return '刚刚活跃'
+  return `${t}活跃`
 })
 function openSheet(id: string) {
   pressEnd()
@@ -175,29 +190,42 @@ function doRename() {
   renameText.value = sheetSession.value?.name || ''
   renaming.value = true
 }
-// 状态区：进行中 > 请决策 > 未阅读 > 已中断；已阅读不显示
-// 四种状态互斥：一轮问答同一时刻只处一个阶段，直接取单一字段
-function status(s: FakeSession) { return s.status || '' }
-function statusText(s: FakeSession) {
-  return ({ running: '进行中', decision: '请决策', unread: '未阅读', interrupted: '已中断' } as Record<string, string>)[s.status || ''] || ''
+// 状态区：四种状态互斥（进行中/请决策/未阅读/已中断），已阅读不显示
+function status(r: Row) {
+  if (sessions.decisionIds.includes(r.id)) return 'decision'
+  if (r.running) return 'running'
+  if (r.unread) return 'unread'
+  return ''
 }
-function saveRename() {
-  if (sheetId.value) ui.renameSession(sheetId.value, renameText.value)
+function statusText(r: Row) {
+  return ({ running: '进行中', decision: '请决策', unread: '未阅读', interrupted: '已中断' } as Record<string, string>)[status(r)] || ''
+}
+async function saveRename() {
+  if (sheetId.value) {
+    try { await sessions.rename(sheetId.value, renameText.value) } catch (e) { ui.toastMsg(e instanceof Error ? e.message : String(e)) }
+  }
   renaming.value = false
   closeSheet()
 }
-function doPin() {
-  if (sheetId.value) ui.togglePin(sheetId.value)
+async function doPin() {
+  if (sheetId.value) {
+    try { await sessions.togglePin(sheetId.value, !!sheetSession.value?.pinned) } catch (e) { ui.toastMsg(e instanceof Error ? e.message : String(e)) }
+  }
   closeSheet()
 }
-function doArchive() {
-  if (sheetId.value) { ui.removeSession(sheetId.value); ui.toastMsg('已归档') }
+async function doArchive() {
+  if (sheetId.value) {
+    try { await sessions.archive(sheetId.value); ui.toastMsg('已归档') } catch (e) { ui.toastMsg(e instanceof Error ? e.message : String(e)) }
+  }
   closeSheet()
 }
-function doDelete() {
-  if (sheetId.value) { ui.removeSession(sheetId.value); ui.toastMsg('已删除') }
+async function doDelete() {
+  if (sheetId.value) {
+    try { await sessions.remove(sheetId.value); ui.toastMsg('已删除') } catch (e) { ui.toastMsg(e instanceof Error ? e.message : String(e)) }
+  }
   closeSheet()
 }
+onMounted(() => { void sessions.load(); sessions.listen() })
 </script>
 
 <style scoped>

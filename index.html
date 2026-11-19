@@ -1,6 +1,15 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
+    <script>
+      // 开发预览身份标记：仅 vite dev（5173）注入；产线由官方网关注入，端口不同不生效。
+      if (location.port === '5173') {
+        window.__HERMES_UI_SURFACE__ = 'webapp'
+        window.__HERMES_AUTH_REQUIRED__ = true
+        window.__HERMES_BASE_PATH__ = ''
+      }
+    </script>
+
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="icon" type="image/jpeg" href="/favicon.jpg" />

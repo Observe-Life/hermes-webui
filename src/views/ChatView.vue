@@ -1,10 +1,10 @@
 <template>
   <div class="d-flex flex-column fill-height">
     <v-toolbar density="comfortable" flat color="background" class="whisper-border">
-      <v-btn v-if="!mdAndUp" icon="mdi-arrow-left" variant="text" @click="emit('back')" />
+      <v-btn icon="mdi-arrow-left" variant="text" @click="emit('back')" />
       <v-toolbar-title class="text-subtitle-1 font-weight-bold">{{ session?.name || '会话' }}</v-toolbar-title>
       <v-spacer />
-      <span v-if="ui.replying" class="run-pill mr-2"><span class="spin" />回复中</span>
+      <span v-if="chat.sending || chat.stream" class="run-pill mr-2"><span class="spin" />回复中</span>
     </v-toolbar>
 
     <!-- 空会话态：借鉴参考图 -->
@@ -23,8 +23,11 @@
       <div v-for="(m, i) in msgs" :key="i" class="d-flex mb-3" :class="m.who === 'me' ? 'justify-end' : 'justify-start'">
         <div v-if="m.who === 'me'" class="msg-me px-4 py-2 text-body-2">{{ m.text }}</div>
         <div v-else class="msg-ai px-4 py-2 text-body-2">
-          {{ m.text }}<span v-if="m.streaming" class="cursor">▍</span>
+          {{ m.text }}
         </div>
+      </div>
+      <div v-if="chat.stream && chat.stream.text" class="d-flex mb-3 justify-start">
+        <div class="msg-ai px-4 py-2 text-body-2">{{ chat.stream.text }}<span class="cursor">▍</span></div>
       </div>
     </div>
 
@@ -48,31 +51,34 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, onMounted, ref, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { useDisplay } from 'vuetify'
 import { useUiStore } from '../stores/ui'
+import { useChatStore } from '../stores/chat'
+import { useSessionsStore } from '../stores/sessions'
 
 const props = defineProps<{ sid?: string }>()
 const emit = defineEmits<{ back: [] }>()
 const route = useRoute()
 const ui = useUiStore()
-const { mdAndUp } = useDisplay()
+const chat = useChatStore()
+const sessions = useSessionsStore()
 const id = computed(() => props.sid ?? String(route.params.id || ''))
-const session = computed(() => ui.sessions.find(s => s.id === id.value))
-const msgs = computed(() => ui.chats[id.value] || [])
-const empty = computed(() => msgs.value.length === 0)
+const session = computed(() => sessions.rows.find(r => r.id === id.value))
+const msgs = computed(() => chat.msgs)
+const empty = computed(() => chat.loaded && msgs.value.length === 0 && !chat.stream)
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
 
-watch(id, (v) => { if (v) { ui.seed(v); ui.markRead(v) } }, { immediate: true })
-watch(() => msgs.value.length, () => nextTick(() => scroller.value?.scrollTo({ top: 999999 })))
+watch(id, v => { if (v) void chat.open(v) }, { immediate: true })
+onMounted(() => chat.listen())
+watch(() => [msgs.value.length, chat.stream?.text], () => nextTick(() => scroller.value?.scrollTo({ top: 999999 })))
 
 function send() {
   const t = draft.value.trim()
-  if (!t || ui.replying) return
+  if (!t || chat.sending) return
   draft.value = ''
-  ui.send(id.value, t)
+  void chat.send(t)
 }
 </script>
 

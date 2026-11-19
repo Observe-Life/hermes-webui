@@ -12,7 +12,7 @@
             <v-icon icon="mdi-earth" size="22" class="sic" />
             <div class="scol">
               <span class="slabel">连接服务器</span>
-              <span class="ssub">http://192.168.31.115:8642</span>
+              <span class="ssub">http://192.168.31.115:8642 · {{ statusLine }}</span>
             </div>
             <v-icon icon="mdi-chevron-right" size="20" class="schev" />
           </div>
@@ -51,6 +51,54 @@
                 </div>
               </template>
             </v-card>
+            <!-- 契约层真配置：按板块映射的官方配置字段（改后点右上角保存） -->
+            <template v-if="fields.length">
+              <v-card class="sgroup" rounded="xl" flat>
+                <template v-for="(f, fi) in fields" :key="f.key">
+                  <div v-if="fi > 0" class="sdiv" />
+                  <div class="frow">
+                    <div class="fcol">
+                      <span class="flabel">{{ fieldLabel(f) }}</span>
+                      <span v-if="f.schema.description" class="fdesc">{{ f.schema.description }}</span>
+                    </div>
+                    <div class="fctl">
+                      <v-switch
+                        v-if="f.schema.type === 'boolean'"
+                        :model-value="!!f.value" density="compact" hide-details color="primary"
+                        @update:model-value="v => settings.edit(f.key, v)" />
+                      <v-select
+                        v-else-if="f.schema.type === 'select' && f.schema.options?.length"
+                        :model-value="String(f.value ?? '')" :items="f.schema.options.map(String)" density="compact"
+                        variant="underlined" hide-details @update:model-value="v => settings.edit(f.key, v)" />
+                      <v-text-field
+                        v-else-if="f.schema.type === 'number'"
+                        :model-value="String(f.value ?? '')" type="number" density="compact"
+                        variant="underlined" hide-details @update:model-value="v => settings.edit(f.key, v === '' ? undefined : Number(v))" />
+                      <v-text-field
+                        v-else-if="f.schema.type === 'list'"
+                        :model-value="Array.isArray(f.value) ? f.value.join(', ') : String(f.value ?? '')" density="compact"
+                        variant="underlined" hide-details @update:model-value="v => settings.edit(f.key, String(v || '').split(',').map(x => x.trim()).filter(Boolean))" />
+                      <v-textarea
+                        v-else-if="f.schema.type === 'text'"
+                        :model-value="String(f.value ?? '')" density="compact" rows="2" auto-grow
+                        variant="underlined" hide-details @update:model-value="v => settings.edit(f.key, v)" />
+                      <v-text-field
+                        v-else
+                        :model-value="String(f.value ?? '')" density="compact"
+                        variant="underlined" hide-details @update:model-value="v => settings.edit(f.key, v)" />
+                    </div>
+                  </div>
+                </template>
+              </v-card>
+              <div class="text-center pb-4">
+                <v-btn color="primary" variant="flat" rounded="lg" :disabled="!settings.dirty.size" :loading="settings.saving" @click="save">
+                  保存{{ settings.dirty.size ? '（' + settings.dirty.size + ' 项已改）' : '' }}
+                </v-btn>
+              </div>
+            </template>
+            <v-card v-else class="sgroup pa-4 text-center" rounded="xl" flat>
+              <span style="font-size: 13px; color: #a5a09a">该板块使用专用接口（模型列表 / 插件 / 密钥等），将在后续轮次逐板块接入。</span>
+            </v-card>
           </div>
         </div>
       </div>
@@ -60,8 +108,9 @@
 
 <script setup lang="ts">
 // 图标名对应 src/icons/ 下的官方提取件（名称取自官方前端源码 lib/icons.ts 与 subpages.ts 的映射）
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useUiStore } from '../stores/ui'
+import { useSettingsStore, type Field } from '../stores/settings'
 import OfficialIcon from '../components/OfficialIcon.vue'
 
 type Sub = [string, string]
@@ -71,6 +120,19 @@ interface Group { id: string; rows: Row[] }
 const props = defineProps<{ overlay?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 const ui = useUiStore()
+const settings = useSettingsStore()
+onMounted(() => { void settings.load() })
+const fields = computed(() => (current.value ? settings.fieldsFor(current.value.key) : []))
+const statusLine = computed(() => {
+  const st = settings.status as null | { version?: string; gateway_state?: string }
+  if (!st) return '连接中…'
+  return `网关${st.gateway_state === 'running' ? '运行中' : st.gateway_state || ''} · v${st.version || '?'}`
+})
+function fieldLabel(f: Field) {
+  const last = f.key.split('.').pop() || f.key
+  return f.schema.description ? last : last
+}
+async function save() { try { await settings.save(); toast('已保存') } catch (e) { toast(e instanceof Error ? e.message : String(e)) } }
 
 function toast(t: string) { ui.toastMsg(t) }
 
@@ -135,6 +197,11 @@ function backSection() { history.back() }
 .scol .slabel { margin-bottom: 2px; }
 .ssub { font-size: 14px; color: #a5a09a; }
 .sdiv { height: 1px; background: rgba(0, 0, 0, 0.06); margin: 0 18px; }
+.frow { display: flex; align-items: center; gap: 12px; padding: 10px 18px; }
+.fcol { flex: 1; min-width: 0; }
+.flabel { font-size: 14px; color: rgba(0,0,0,0.9); word-break: break-all; }
+.fdesc { display: block; font-size: 11.5px; color: #a5a09a; margin-top: 2px; }
+.fctl { flex: none; min-width: 120px; max-width: 220px; }
 .subpage {
   position: absolute; inset: 0; z-index: 6;
   background: rgb(var(--v-theme-background));
