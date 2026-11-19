@@ -181,6 +181,7 @@ const activeText = computed(() => {
   return `${t}活跃`
 })
 function openSheet(id: string) {
+  if (ui.sheetId) return  // S3：已开不重复压历史栈，保证 push/back 严格配对
   pressEnd()
   ui.sheetId = id
   history.pushState({ l: 'sheet' }, '')

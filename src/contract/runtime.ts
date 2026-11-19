@@ -27,7 +27,7 @@ export function onGatewayEvent(handler: (ev: GatewayEvent) => void): () => void 
 export async function bootContract(): Promise<boolean> {
   if (gateway) return true
   if (booting) return booting
-  booting = (async () => {
+  const run = (async () => {
     if (!installBrowserDesktopBridge() && !window.hermesDesktop) {
       $bootError.set('页面缺少服务器身份标记（请用 5173 端口的开发预览打开）')
       $bootPhase.set('error')
@@ -55,7 +55,11 @@ export async function bootContract(): Promise<boolean> {
       return false
     }
   })()
-  return booting
+  booting = run
+  const ok = await run
+  // B1：失败不复位缓存会把重试按钮和登录后自动重连一起锁死；成功则保留缓存
+  if (!ok) booting = null
+  return ok
 }
 
 export function isSignedIn(): Promise<boolean> {

@@ -25,7 +25,8 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
-    allowedHosts: true,
+    // S8：仅放行本项目的访问主机，不对全网段通配
+    allowedHosts: ['web-dev', 'localhost', '127.0.0.1', '192.168.31.115'],
     // 开发预览：契约层请求直转官方网关（同源策略下由网关的登录会话凭证说话）。
     proxy: {
       // 开发预览直转官方网关；来源头改写为官方网页端自己的地址——

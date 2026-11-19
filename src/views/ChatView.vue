@@ -4,6 +4,7 @@
       <v-btn icon="mdi-arrow-left" variant="text" @click="emit('back')" />
       <v-toolbar-title class="text-subtitle-1 font-weight-bold">{{ session?.name || '会话' }}</v-toolbar-title>
       <v-spacer />
+      <span v-if="rt.conn && rt.conn !== 'open'" class="run-pill mr-2"><span class="spin" />{{ rt.conn === 'connecting' || rt.conn === 'reconnecting' ? '重连中' : '连接断开' }}</span>
       <span v-if="chat.sending || chat.stream" class="run-pill mr-2"><span class="spin" />回复中</span>
     </v-toolbar>
 
@@ -56,6 +57,7 @@ import { useRoute } from 'vue-router'
 import { useUiStore } from '../stores/ui'
 import { useChatStore } from '../stores/chat'
 import { useSessionsStore } from '../stores/sessions'
+import { useRuntimeStore } from '../stores/runtime'
 
 const props = defineProps<{ sid?: string }>()
 const emit = defineEmits<{ back: [] }>()
@@ -63,6 +65,7 @@ const route = useRoute()
 const ui = useUiStore()
 const chat = useChatStore()
 const sessions = useSessionsStore()
+const rt = useRuntimeStore()
 const id = computed(() => props.sid ?? String(route.params.id || ''))
 const session = computed(() => sessions.rows.find(r => r.id === id.value))
 const msgs = computed(() => chat.msgs)
@@ -72,6 +75,11 @@ const scroller = ref<HTMLElement | null>(null)
 
 watch(id, v => { if (v) void chat.open(v) }, { immediate: true })
 onMounted(() => chat.listen())
+let wasDown = false
+watch(() => rt.conn, v => {
+  if (v && v !== 'open') { wasDown = true; return }
+  if (v === 'open' && wasDown && id.value) { wasDown = false; void chat.open(id.value) }
+})
 watch(() => [msgs.value.length, chat.stream?.text], () => nextTick(() => scroller.value?.scrollTo({ top: 999999 })))
 
 function send() {

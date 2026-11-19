@@ -41,8 +41,8 @@
         </v-toolbar>
         <div class="overflow-y-auto" style="height: calc(100% - 56px)">
           <div class="px-3 pb-8" style="max-width: 640px">
-            <v-card v-if="current.subs" class="sgroup" rounded="xl" flat>
-              <template v-for="(sub, si) in current.subs" :key="sub[0]">
+            <v-card v-if="subsFor(current)" class="sgroup" rounded="xl" flat>
+              <template v-for="(sub, si) in subsFor(current)" :key="sub[0]">
                 <div v-if="si > 0" class="sdiv" />
                 <div class="srow2" @click="openSub(sub)">
                   <OfficialIcon :name="sub[1]" :size="22" />
@@ -91,7 +91,8 @@
                       <v-text-field
                         v-else-if="f.schema.type === 'number'"
                         :model-value="String(f.value ?? '')" type="number" density="compact"
-                        variant="underlined" hide-details @update:model-value="v => settings.edit(f.key, v === '' ? undefined : Number(v))" />
+                        variant="underlined" hide-details
+                        @update:model-value="v => { if (v === '') { toast('数值不能为空，已还原'); settings.edit(f.key, f.original) } else settings.edit(f.key, Number(v)) }" />
                       <v-text-field
                         v-else-if="f.schema.type === 'list'"
                         :model-value="Array.isArray(f.value) ? f.value.join(', ') : String(f.value ?? '')" density="compact"
@@ -124,6 +125,21 @@
 import { computed, onMounted } from 'vue'
 import { useUiStore } from '../stores/ui'
 import { useSettingsStore, fieldLabel, fieldDesc } from '../stores/settings'
+
+// 官方子页 id → 图标（官方提取件）；中文标签在 stores/settings 的 SUBPAGE_LABELS 一处维护
+const SUB_ICON: Record<string, string> = {
+  main: 'box', fallbacks: 'box', auxiliary: 'cpu', delegation: 'git-fork', moa: 'users',
+  behavior: 'message-circle', attachments: 'photo',
+  projects: 'folder-open', shell: 'terminal-2', files: 'file-text',
+  approvals: 'shield-lock', privacy: 'lock', checkpoints: 'archive',
+  profile: 'globe', network: 'network',
+  persistent: 'brain', context: 'file-text',
+  conversation: 'microphone', transcription: 'file-text', speech: 'volume-2',
+  desktop: 'device-desktop', runtime: 'cpu', tools: 'tool', terminal: 'terminal-2', output: 'file-text'
+}
+
+// 连接服务器卡片地址（产线按实际网关地址调整；开发预览经 9120 登录）
+const SERVER_URL = 'http://192.168.31.115:8642'
 import OfficialIcon from '../components/OfficialIcon.vue'
 
 type Sub = [string, string, string?]
@@ -139,6 +155,14 @@ onMounted(() => { void settings.load() })
 function toast(t: string) { ui.toastMsg(t) }
 
 // 官方一级按钮顺序与分组（照官方设置导航）；subs=[中文, 图标, 官方子页 id]
+const OFFICIAL_SECTIONS = ['model', 'chat', 'workspace', 'safety', 'browser', 'memory', 'voice', 'advanced']
+function subsFor(row: { key: string; subs?: Sub[] }): Sub[] {
+  if (OFFICIAL_SECTIONS.includes(row.key)) {
+    return settings.subpagesFor(row.key).map(d => [d.label, SUB_ICON[d.id] || 'settings-2', d.id] as Sub)
+  }
+  return row.subs || []
+}
+
 const groups: Group[] = [
   { id: 'g1', rows: [
     { key: 'model', label: '模型', icon: 'box', subs: [['主模型', 'box', 'main'], ['备用模型', 'box', 'fallbacks'], ['辅助模型', 'cpu', 'auxiliary'], ['子智能体', 'git-fork', 'delegation'], ['多智能体协作', 'users', 'moa']] },
@@ -178,7 +202,7 @@ const current = computed(() => {
 const subNote = computed(() => !!ui.settingsSub && ui.settingsSub === 'note')
 const subLabel = computed(() => {
   if (!current.value) return ''
-  const sub = (current.value.subs || []).find(s => s[2] === ui.settingsSub)
+  const sub = subsFor(current.value).find(s => s[2] === ui.settingsSub)
   return sub ? sub[0] : ''
 })
 const subFields = computed(() => {
@@ -187,8 +211,8 @@ const subFields = computed(() => {
 })
 const statusLine = computed(() => {
   const st = settings.status as null | { version?: string; gateway_state?: string }
-  if (!st) return 'http://192.168.31.115:8642'
-  return `http://192.168.31.115:8642 · 网关${st.gateway_state === 'running' ? '运行中' : st.gateway_state || ''} · v${st.version || '?'}`
+  if (!st) return SERVER_URL
+  return `${SERVER_URL} · 网关${st.gateway_state === 'running' ? '运行中' : st.gateway_state || ''} · v${st.version || '?'}`
 })
 
 function openSection(row: Row) {

@@ -18,11 +18,13 @@ export const useRuntimeStore = defineStore('runtime', {
       if (bound) return
       bound = true
       const ui = useUiStore()
-      let lastNotice = 0
+      // S7：按通知序号判新（dismiss 会让长度回落，长度比较会漏弹）
+      const seen = new Set<string>()
       $contractNotices.subscribe(list => {
-        if (list.length > lastNotice) {
-          ui.toastMsg(list[list.length - 1].text)
-          lastNotice = list.length
+        for (const n of list) {
+          if (seen.has(n.id)) continue
+          seen.add(n.id)
+          ui.toastMsg(n.text)
         }
       })
       $bootPhase.subscribe(p => { this.phase = p })
@@ -32,13 +34,6 @@ export const useRuntimeStore = defineStore('runtime', {
     async boot() {
       this.bind()
       return bootContract()
-    },
-    async retryAfterSignin() {
-      const ok = await bootContract()
-      if (!ok && this.phase === 'signin') {
-        // 登录完成由「检测到会话后重试」路径触发
-      }
-      return ok
     },
     async pollSignin() {
       const { isSignedIn } = await import('../contract/runtime')

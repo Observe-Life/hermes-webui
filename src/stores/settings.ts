@@ -12,7 +12,7 @@ import { CONFIG_SUBPAGE_DEFINITIONS, configSubpageForField } from '../data/setti
 import { fieldCopyForSchemaKey } from '../data/field-copy'
 import { FIELD_LABELS_ZH, FIELD_DESCRIPTIONS_ZH } from '../data/field-copy-zh'
 
-export interface Field { key: string; schema: ConfigFieldSchema; value: unknown }
+export interface Field { key: string; schema: ConfigFieldSchema; value: unknown; original: unknown }
 
 // 官方中文文案：键匹配规则同官方 field-copy（段内 snake→camel），查不到时回退原名
 export function fieldLabel(key: string): string {
@@ -102,7 +102,7 @@ export const useSettingsStore = defineStore('settings', {
       for (const key of keys) {
         if (configSubpageForField(section, key) !== subId) continue
         const value = getPath(this.config, key)
-        out.push({ key, schema: this.schema[key] || inferSchema(value), value })
+        out.push({ key, schema: this.schema[key] || inferSchema(value), value, original: value })
       }
       out.sort((a, b) => a.key.localeCompare(b.key))
       return out
@@ -116,7 +116,12 @@ export const useSettingsStore = defineStore('settings', {
       if (!this.dirty.size) return
       this.saving = true
       try {
-        await saveHermesConfig(this.config as never)
+        // S1：只送改动键（官方 patch 模式），避免陈旧快照盖回期间别端的改动
+        const patch: Record<string, unknown> = {}
+        for (const key of this.dirty) {
+          setPath(patch, key, getPath(this.config, key))
+        }
+        await saveHermesConfig(patch as never)
         this.dirty = new Set()
         await this.load()
       } finally {

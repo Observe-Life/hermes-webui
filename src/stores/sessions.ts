@@ -53,6 +53,7 @@ function mapRow(s: SessionInfo): Row {
 
 let listening = false
 let reloadTimer: null | ReturnType<typeof setTimeout> = null
+let lastReload = 0
 
 export const useSessionsStore = defineStore('sessions', {
   state: () => ({
@@ -85,8 +86,19 @@ export const useSessionsStore = defineStore('sessions', {
       }
     },
     scheduleReload() {
-      if (reloadTimer) clearTimeout(reloadTimer)
-      reloadTimer = setTimeout(() => { void this.load() }, 400)
+      // S2：立即刷 + 合并节流（最多每 700ms 一次），避免高频事件把刷新无限顺延
+      const now = Date.now()
+      if (now - lastReload >= 700) {
+        lastReload = now
+        void this.load()
+        return
+      }
+      if (reloadTimer) return
+      reloadTimer = setTimeout(() => {
+        reloadTimer = null
+        lastReload = Date.now()
+        void this.load()
+      }, 750)
     },
     async rename(id: string, title: string) {
       await renameSession(id, title)

@@ -9,7 +9,7 @@
       <div v-else-if="rt.phase === 'signin'" class="bootcard">
         <div class="boottext">需要登录服务器</div>
         <v-btn color="primary" variant="flat" rounded="lg" @click="openSignin">打开登录页</v-btn>
-        <div class="bootsub">登录后本页会自动继续；登录页开在新标签，本页保持等待</div>
+        <div class="bootsub">将转到服务器登录页；登录完成会自动回到本页并继续连接</div>
       </div>
       <div v-else class="bootcard">
         <div class="boottext">连接失败</div>
@@ -50,7 +50,7 @@ onMounted(() => {
 })
 onUnmounted(() => { if (poll) clearInterval(poll) })
 
-function openSignin() { window.open('/login', '_blank') }
+function openSignin() { location.assign('/login') }
 </script>
 
 <style scoped>
