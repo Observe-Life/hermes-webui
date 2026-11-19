@@ -41,7 +41,7 @@ export const useUiStore = defineStore('ui', {
     addSession(): FakeSession {
       const s: FakeSession = {
         id: 'n' + Date.now(), name: '新会话', mono: '新', color: '#0075de',
-        preview: '新会话', time: '现在', unread: 0
+        preview: '新会话', time: '现在'
       }
       this.sessions.unshift(s)
       return s
@@ -57,7 +57,7 @@ export const useUiStore = defineStore('ui', {
     },
     markRead(id: string) {
       const s = this.sessions.find(x => x.id === id)
-      if (s) s.unread = 0
+      if (s && s.status === 'unread') s.status = undefined
     },
     send(id: string, text: string) {
       this.seed(id)

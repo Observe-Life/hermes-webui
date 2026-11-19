@@ -176,16 +176,10 @@ function doRename() {
   renaming.value = true
 }
 // 状态区：进行中 > 请决策 > 未阅读 > 已中断；已阅读不显示
-type St = 'running' | 'decision' | 'unread' | 'interrupted'
-function status(s: FakeSession): St | '' {
-  if (s.running) return 'running'
-  if (s.needDecision) return 'decision'
-  if (s.unread) return 'unread'
-  if (s.interrupted) return 'interrupted'
-  return ''
-}
+// 四种状态互斥：一轮问答同一时刻只处一个阶段，直接取单一字段
+function status(s: FakeSession) { return s.status || '' }
 function statusText(s: FakeSession) {
-  return ({ running: '进行中', decision: '请决策', unread: '未阅读', interrupted: '已中断' } as Record<string, string>)[status(s)] || ''
+  return ({ running: '进行中', decision: '请决策', unread: '未阅读', interrupted: '已中断' } as Record<string, string>)[s.status || ''] || ''
 }
 function saveRename() {
   if (sheetId.value) ui.renameSession(sheetId.value, renameText.value)

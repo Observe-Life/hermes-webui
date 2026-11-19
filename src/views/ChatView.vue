@@ -39,7 +39,7 @@
           <span>GLM 5.3 Flash</span>
           <v-icon icon="mdi-chevron-down" size="16" />
         </button>
-        <div class="flex-1" />
+        <div class="gap1" />
         <button class="circ" @click="ui.toastMsg('语音（原型占位）')" aria-label="语音"><svg width="18" height="18" viewBox="0 0 18 18"><g fill="currentColor"><rect x="1" y="6" width="2.4" height="6" rx="1.2"/><rect x="5.4" y="3" width="2.4" height="12" rx="1.2"/><rect x="9.8" y="1" width="2.4" height="16" rx="1.2"/><rect x="14.2" y="5" width="2.4" height="8" rx="1.2"/></g></svg></button>
         <button class="circ send" :class="{ on: !!draft.trim() }" @click="send"><v-icon icon="mdi-arrow-up" size="22" /></button>
       </div>
@@ -108,6 +108,7 @@ function send() {
 }
 .draft::placeholder { color: #a5a09a; }
 .ctrrow { display: flex; align-items: center; gap: 10px; }
+.gap1 { flex: 1; }
 .circ {
   width: 40px; height: 40px; border-radius: 50%; border: none; flex: none;
   background: #f0efec; color: #55524e; display: flex; align-items: center; justify-content: center;
