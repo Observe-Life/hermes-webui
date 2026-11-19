@@ -12,6 +12,7 @@ export const useUiStore = defineStore('ui', {
     toast: '',
     activeId: 'webui',
     settingsSection: '',
+    sheetId: '',
     mobileView: null as null | 'settings' | 'extensions'
   }),
   getters: {

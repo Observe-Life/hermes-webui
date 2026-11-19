@@ -86,11 +86,18 @@ function te() {
   const elapsed = Math.max(1, lt - st)
   const v = Math.abs(lx - sx) / elapsed
   const commit = Math.abs(drag.value) > w * 0.25 || (Math.abs(drag.value) > 50 && v > 0.45)
-  if (commit) pane.value = pane.value === 0 ? 1 : 0
+  if (commit) {
+    if (pane.value === 0) { pane.value = 1; history.pushState({ l: 'chat' }, '') }
+    else { pane.value = 0; history.back() }
+  }
   dragging.value = false
   drag.value = 0
 }
-function go(p: number) { if (!mdAndUp.value) pane.value = p }
+function go(p: number) {
+  if (mdAndUp.value) return
+  if (p === 1 && pane.value === 0) { pane.value = 1; history.pushState({ l: 'chat' }, '') }
+  else if (p === 0 && pane.value === 1) { pane.value = 0; history.back() }
+}
 
 function dimStyle(idx: number) {
   if (mdAndUp.value) return { opacity: '0', transition: 'none' }
@@ -109,8 +116,11 @@ watch(() => ui.mobileView, (v) => {
   if (v) history.pushState({ m: v }, '')
 })
 function onPop() {
+  // 从最上层开始逐层关：设置二级页 > 设置/扩展层 > 会话弹窗 > 聊天页
   if (ui.settingsSection) ui.settingsSection = ''
   else if (ui.mobileView) ui.mobileView = null
+  else if (ui.sheetId) ui.sheetId = ''
+  else if (pane.value === 1) pane.value = 0
 }
 function closeOverlay() { history.back() }
 onMounted(() => window.addEventListener('popstate', onPop))

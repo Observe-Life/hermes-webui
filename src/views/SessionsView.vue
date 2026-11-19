@@ -25,17 +25,18 @@
           @touchend.passive="pressEnd"
           @touchcancel="pressEnd"
           @contextmenu.prevent="openSheet(s.id)">
-          <div class="ava" :style="{ background: s.color }">{{ s.mono }}</div>
-          <div class="mid">
-            <div class="t1">
+          <div class="ava" :style="{ background: s.color }">{{ s.name.charAt(0) }}</div>
+          <div class="lines">
+            <div class="l1">
               <span class="tname">{{ s.name }}</span>
-              <span v-if="s.running" class="run-pill"><span class="spin" />进行中</span>
+              <span class="time">{{ s.time }}</span>
             </div>
-            <div class="t2">{{ s.preview }}</div>
-          </div>
-          <div class="side">
-            <span class="time">{{ s.time }}</span>
-            <span v-if="s.unread" class="dot" />
+            <div class="l2">
+              <span class="t2">{{ s.preview }}</span>
+              <span v-if="status(s)" class="spill" :class="status(s)">
+                <span v-if="status(s) === 'running'" class="spin" />{{ statusText(s) }}
+              </span>
+            </div>
           </div>
         </component>
       </template>
@@ -50,7 +51,7 @@
     <!-- 长按弹窗：完全照抄参考图 -->
     <teleport to="body">
       <transition name="fade">
-        <div v-if="sheetId" class="scrim" @click="sheetId = ''" />
+        <div v-if="sheetId" class="scrim" @click="closeSheet" />
       </transition>
       <transition name="sheetup">
         <div v-if="sheetId" class="sheet" @click.stop>
@@ -97,6 +98,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUiStore } from '../stores/ui'
+import type { FakeSession } from '../data'
 
 const props = defineProps<{ embedded?: boolean }>()
 const emit = defineEmits<{ open: [] }>()
@@ -152,7 +154,7 @@ function goExtensions() {
 }
 
 // 长按弹窗
-const sheetId = ref('')
+const sheetId = computed(() => ui.sheetId)
 const renaming = ref(false)
 const renameText = ref('')
 const sheetSession = computed(() => ui.sessions.find(s => s.id === sheetId.value))
@@ -165,28 +167,42 @@ const activeText = computed(() => {
 })
 function openSheet(id: string) {
   pressEnd()
-  sheetId.value = id
+  ui.sheetId = id
+  history.pushState({ l: 'sheet' }, '')
 }
+function closeSheet() { history.back() }
 function doRename() {
   renameText.value = sheetSession.value?.name || ''
   renaming.value = true
 }
+// 状态区：进行中 > 请决策 > 未阅读 > 已中断；已阅读不显示
+type St = 'running' | 'decision' | 'unread' | 'interrupted'
+function status(s: FakeSession): St | '' {
+  if (s.running) return 'running'
+  if (s.needDecision) return 'decision'
+  if (s.unread) return 'unread'
+  if (s.interrupted) return 'interrupted'
+  return ''
+}
+function statusText(s: FakeSession) {
+  return ({ running: '进行中', decision: '请决策', unread: '未阅读', interrupted: '已中断' } as Record<string, string>)[status(s)] || ''
+}
 function saveRename() {
   if (sheetId.value) ui.renameSession(sheetId.value, renameText.value)
   renaming.value = false
-  sheetId.value = ''
+  closeSheet()
 }
 function doPin() {
   if (sheetId.value) ui.togglePin(sheetId.value)
-  sheetId.value = ''
+  closeSheet()
 }
 function doArchive() {
   if (sheetId.value) { ui.removeSession(sheetId.value); ui.toastMsg('已归档') }
-  sheetId.value = ''
+  closeSheet()
 }
 function doDelete() {
   if (sheetId.value) { ui.removeSession(sheetId.value); ui.toastMsg('已删除') }
-  sheetId.value = ''
+  closeSheet()
 }
 </script>
 
@@ -205,23 +221,28 @@ function doDelete() {
   cursor: pointer; user-select: none; -webkit-user-select: none;
 }
 .srow:hover { background: #f6f5f4; }
-.mid { flex: 1; min-width: 0; }
-.t1 {
-  display: flex; align-items: center; gap: 6px;
+.lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.l1, .l2 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tname {
   font-size: 14.5px; font-weight: 600; line-height: 1.2;
-  white-space: nowrap; overflow: hidden;
-}
-.tname { overflow: hidden; text-overflow: ellipsis; }
-.t2 {
-  font-size: 12.5px; color: #615d59; margin-top: 1px; line-height: 1.3;
+  flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.side {
-  flex: none; display: flex; flex-direction: column;
-  align-items: flex-end; gap: 3px;
-  font-size: 11px; color: #a39e98;
+.time { flex: none; font-size: 11px; color: #a39e98; }
+.t2 {
+  font-size: 12.5px; color: #615d59; line-height: 1.3;
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: #0075de; }
+.spill {
+  flex: none; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600;
+  padding: 2px 7px; border-radius: 99px;
+}
+.spill.running { background: #f2f9ff; color: #097fe8; }
+.spill.unread { background: rgba(0, 117, 222, 0.1); color: #0075de; }
+.spill.decision { background: rgba(221, 91, 0, 0.12); color: #dd5b00; }
+.spill.interrupted { background: rgba(97, 93, 89, 0.12); color: #615d59; }
 .fab { position: absolute; right: 20px; bottom: 20px; z-index: 5; }
 
 /* 长按弹窗（照抄参考图） */
